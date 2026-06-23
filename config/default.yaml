@@ -1,0 +1,18 @@
+# CIL runtime configuration (file-based; env vars CIL_* override these).
+# Scoring/policy thresholds are NOT here — they live in their own config
+# artifacts (e.g. CCS-001) loaded by the engines, never hardcoded.
+
+app_name: cil
+env: local
+log_level: INFO
+host: 0.0.0.0
+port: 8000
+
+# Telemetry ingest loop (WAN monitoring)
+telemetry_enabled: true
+telemetry_interval_s: 1.0
+telemetry_db_path: data/telemetry.db
+
+# Application monitoring loop (clinical endpoint liveness)
+app_monitoring_enabled: true
+app_monitoring_interval_s: 5.0
