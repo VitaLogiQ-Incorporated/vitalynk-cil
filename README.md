@@ -114,7 +114,9 @@ the artifact; deploying it onto the Ericsson E400 / staging is ops-owned.
 - **CIL-101** — repo skeleton: package layout, config, JSON logging, `/health` +
   `/metrics`, tests, Docker, CI/CD (GHCR publish).
 - **CIL-201** — telemetry schema (`TelemetrySample`) + `TelemetryAdapter` interface
-  + normalization (missing-field detection).
+  + normalization (missing-field detection) + the Ericsson adapter (fetch →
+  normalize) with a `NetCloudClient` transport seam. Only the NetCloud HTTP client
+  is left to ops/EPIC-07.
 - **CIL-204** — telemetry simulator with injectable failure scenarios (latency
   spike, loss ramp, jitter, registration drop, blackout, dual-modem failover).
 - **CIL-202** — WAN-monitoring ingest loop wired into the app

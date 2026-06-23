@@ -8,7 +8,7 @@ Ericsson binding (ops / EPIC-07) implements the same protocol and drops in later
 
 from cil.telemetry.adapter import TelemetryAdapter
 from cil.telemetry.app_monitor import ApplicationMonitor
-from cil.telemetry.ericsson import EricssonNetCloudAdapter
+from cil.telemetry.ericsson import EricssonNetCloudAdapter, NetCloudClient
 from cil.telemetry.monitor import TelemetryCollector
 from cil.telemetry.normalize import normalize
 from cil.telemetry.probes import (
@@ -37,6 +37,7 @@ __all__ = [
     "EndpointCondition",
     "EndpointHealth",
     "EricssonNetCloudAdapter",
+    "NetCloudClient",
     "NetworkMetrics",
     "PathProfile",
     "ProbeDepth",
