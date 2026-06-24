@@ -18,6 +18,10 @@ def client() -> Iterator[TestClient]:
     Ops/health tests don't need the background ingest loop (which would write a
     DB); telemetry wiring is covered separately in test_app_telemetry.
     """
-    settings = Settings(telemetry_enabled=False)
+    settings = Settings(
+        telemetry_enabled=False,
+        app_monitoring_enabled=False,
+        data_platform_enabled=False,
+    )
     with TestClient(create_app(settings)) as test_client:
         yield test_client

@@ -17,14 +17,15 @@ import asyncio
 import sqlite3
 from collections.abc import Iterable
 from datetime import datetime
-from pathlib import Path
 
+from cil.storage._sqlite import checkpoint, connect, ensure_ts_us, exclusion_clause
 from cil.telemetry.schema import (
     DeviceMetrics,
     NetworkMetrics,
     RadioMetrics,
     TelemetrySample,
 )
+from cil.timeutil import to_us
 
 _COLUMNS: tuple[str, ...] = (
     "ts",
@@ -50,6 +51,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS telemetry (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     ts              TEXT    NOT NULL,
+    ts_us           INTEGER NOT NULL,
     path_id         TEXT    NOT NULL,
     carrier         TEXT    NOT NULL,
     profile         TEXT    NOT NULL,
@@ -67,12 +69,11 @@ CREATE TABLE IF NOT EXISTS telemetry (
     mem_pct         REAL,
     uptime_s        REAL
 );
-CREATE INDEX IF NOT EXISTS idx_telemetry_ts ON telemetry(ts);
-CREATE INDEX IF NOT EXISTS idx_telemetry_path_ts ON telemetry(path_id, ts);
 """
 
 _INSERT = (
-    f"INSERT INTO telemetry ({', '.join(_COLUMNS)}) VALUES ({', '.join(['?'] * len(_COLUMNS))})"
+    f"INSERT INTO telemetry (ts_us, {', '.join(_COLUMNS)}) "
+    f"VALUES (?, {', '.join(['?'] * len(_COLUMNS))})"
 )
 
 
@@ -88,12 +89,12 @@ class SQLiteTelemetryStore:
         await asyncio.to_thread(self._connect)
 
     def _connect(self) -> None:
-        if self._path != ":memory:":
-            Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self._path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
+        conn = connect(self._path)
         conn.executescript(_SCHEMA)
+        ensure_ts_us(conn, "telemetry")  # adds ts_us (+ index) — migrates legacy DBs
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_telemetry_path_ts_us ON telemetry(path_id, ts_us)"
+        )
         conn.commit()
         self._conn = conn
 
@@ -147,7 +148,7 @@ class SQLiteTelemetryStore:
         await self.write_samples((sample,))
 
     async def write_samples(self, samples: Iterable[TelemetrySample]) -> int:
-        rows = [self._to_row(s) for s in samples]
+        rows = [(to_us(s.timestamp), *self._to_row(s)) for s in samples]
         async with self._lock:
             await asyncio.to_thread(self._insert, rows)
         return len(rows)
@@ -176,6 +177,44 @@ class SQLiteTelemetryStore:
         rows = conn.execute(sql, params).fetchall()
         rows.reverse()  # oldest-first
         return rows
+
+    async def read_range(
+        self, *, start_us: int, end_us: int, path_id: str | None = None
+    ) -> list[TelemetrySample]:
+        async with self._lock:
+            rows = await asyncio.to_thread(self._select_range, start_us, end_us, path_id)
+        return [self._from_row(r) for r in rows]
+
+    def _select_range(
+        self, start_us: int, end_us: int, path_id: str | None
+    ) -> list[tuple[object, ...]]:
+        conn = self._require_conn()
+        sql = f"SELECT {', '.join(_COLUMNS)} FROM telemetry WHERE ts_us BETWEEN ? AND ?"
+        params: list[object] = [start_us, end_us]
+        if path_id is not None:
+            sql += " AND path_id = ?"
+            params.append(path_id)
+        sql += " ORDER BY ts_us ASC, id ASC"  # stable on duplicate ts; UNBOUNDED
+        return conn.execute(sql, params).fetchall()
+
+    async def delete_older_than(
+        self, cutoff_us: int, *, exclude_ranges: list[tuple[int, int]] | None = None
+    ) -> int:
+        async with self._lock:
+            return await asyncio.to_thread(self._delete_older_than, cutoff_us, exclude_ranges)
+
+    def _delete_older_than(
+        self, cutoff_us: int, exclude_ranges: list[tuple[int, int]] | None
+    ) -> int:
+        conn = self._require_conn()
+        clause, ex_params = exclusion_clause(exclude_ranges)
+        cur = conn.execute(
+            f"DELETE FROM telemetry WHERE ts_us < ?{clause}", [cutoff_us, *ex_params]
+        )
+        deleted = cur.rowcount
+        conn.commit()
+        checkpoint(conn)
+        return int(deleted)
 
     async def count(self) -> int:
         async with self._lock:

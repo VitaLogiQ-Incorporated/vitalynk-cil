@@ -12,9 +12,10 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
+from cil.storage._sqlite import checkpoint, connect, ensure_ts_us, exclusion_clause
 from cil.telemetry.probes import EndpointHealth, ProbeDepth
+from cil.timeutil import to_us
 
 _COLUMNS: tuple[str, ...] = (
     "ts",
@@ -33,6 +34,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS application_health (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     ts             TEXT    NOT NULL,
+    ts_us          INTEGER NOT NULL,
     endpoint       TEXT    NOT NULL,
     system         TEXT    NOT NULL,
     reachable      INTEGER NOT NULL,
@@ -43,13 +45,11 @@ CREATE TABLE IF NOT EXISTS application_health (
     latency_ms     REAL,
     detail         TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_app_health_ts ON application_health(ts);
-CREATE INDEX IF NOT EXISTS idx_app_health_ep_ts ON application_health(endpoint, ts);
 """
 
 _INSERT = (
-    f"INSERT INTO application_health ({', '.join(_COLUMNS)}) "
-    f"VALUES ({', '.join(['?'] * len(_COLUMNS))})"
+    f"INSERT INTO application_health (ts_us, {', '.join(_COLUMNS)}) "
+    f"VALUES (?, {', '.join(['?'] * len(_COLUMNS))})"
 )
 
 
@@ -65,12 +65,13 @@ class SQLiteApplicationHealthStore:
         await asyncio.to_thread(self._connect)
 
     def _connect(self) -> None:
-        if self._path != ":memory:":
-            Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self._path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
+        conn = connect(self._path)
         conn.executescript(_SCHEMA)
+        ensure_ts_us(conn, "application_health")  # adds ts_us (+ index) — migrates legacy DBs
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_app_health_ep_ts_us "
+            "ON application_health(endpoint, ts_us)"
+        )
         conn.commit()
         self._conn = conn
 
@@ -111,7 +112,7 @@ class SQLiteApplicationHealthStore:
         )
 
     async def write_health(self, health: EndpointHealth) -> None:
-        row = self._to_row(health)
+        row = (to_us(health.timestamp), *self._to_row(health))
         async with self._lock:
             await asyncio.to_thread(self._insert, row)
 
@@ -139,6 +140,44 @@ class SQLiteApplicationHealthStore:
         rows = conn.execute(sql, params).fetchall()
         rows.reverse()
         return rows
+
+    async def read_range(
+        self, *, start_us: int, end_us: int, endpoint: str | None = None
+    ) -> list[EndpointHealth]:
+        async with self._lock:
+            rows = await asyncio.to_thread(self._select_range, start_us, end_us, endpoint)
+        return [self._from_row(r) for r in rows]
+
+    def _select_range(
+        self, start_us: int, end_us: int, endpoint: str | None
+    ) -> list[tuple[object, ...]]:
+        conn = self._require_conn()
+        sql = f"SELECT {', '.join(_COLUMNS)} FROM application_health WHERE ts_us BETWEEN ? AND ?"
+        params: list[object] = [start_us, end_us]
+        if endpoint is not None:
+            sql += " AND endpoint = ?"
+            params.append(endpoint)
+        sql += " ORDER BY ts_us ASC, id ASC"
+        return conn.execute(sql, params).fetchall()
+
+    async def delete_older_than(
+        self, cutoff_us: int, *, exclude_ranges: list[tuple[int, int]] | None = None
+    ) -> int:
+        async with self._lock:
+            return await asyncio.to_thread(self._delete_older_than, cutoff_us, exclude_ranges)
+
+    def _delete_older_than(
+        self, cutoff_us: int, exclude_ranges: list[tuple[int, int]] | None
+    ) -> int:
+        conn = self._require_conn()
+        clause, ex_params = exclusion_clause(exclude_ranges)
+        cur = conn.execute(
+            f"DELETE FROM application_health WHERE ts_us < ?{clause}", [cutoff_us, *ex_params]
+        )
+        deleted = cur.rowcount
+        conn.commit()
+        checkpoint(conn)
+        return int(deleted)
 
     async def count(self) -> int:
         async with self._lock:

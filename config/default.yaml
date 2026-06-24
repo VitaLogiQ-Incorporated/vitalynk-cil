@@ -16,3 +16,14 @@ telemetry_db_path: data/telemetry.db
 # Application monitoring loop (clinical endpoint liveness)
 app_monitoring_enabled: true
 app_monitoring_interval_s: 5.0
+
+# Data platform (EPIC-03). Training repo is a SEPARATE DB (indefinite retention).
+data_platform_enabled: true
+training_db_path: data/training.db
+window_before_s: 900.0     # ±15 min telemetry window around every event
+window_after_s: 900.0
+window_min_radius_s: 300.0 # ±5 min hard floor
+retention_enabled: true
+operational_retention_days: 730  # 24 months (operational only; training is indefinite)
+retention_sweep_interval_s: 3600.0
+no_action_sample_interval_s: 60.0

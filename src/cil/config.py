@@ -54,6 +54,21 @@ class Settings(BaseSettings):
     app_monitoring_enabled: bool = True
     app_monitoring_interval_s: float = 5.0
 
+    # Data platform (EPIC-03). The training repository lives in its OWN DB file
+    # the retention sweeper is never pointed at (indefinite UC2 dataset).
+    data_platform_enabled: bool = True
+    training_db_path: str = "data/training.db"
+    # Telemetry window around every continuity event: ±15 min target, ±5 min floor.
+    window_before_s: float = 900.0
+    window_after_s: float = 900.0
+    window_min_radius_s: float = 300.0
+    # Operational retention (24 months); training is indefinite (no setting — by design).
+    retention_enabled: bool = True
+    operational_retention_days: int = 730
+    retention_sweep_interval_s: float = 3600.0
+    # Negative-class sampling for the training set.
+    no_action_sample_interval_s: float = 60.0
+
     # Path to the YAML config file. Read from the environment so the file source
     # can be pointed elsewhere per environment without code changes.
     config_file: str = DEFAULT_CONFIG_FILE

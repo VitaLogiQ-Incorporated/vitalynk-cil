@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from cil.timeutil import ensure_utc
 
 
 class RadioMetrics(BaseModel):
@@ -67,3 +69,8 @@ class TelemetrySample(BaseModel):
     radio: RadioMetrics
     network: NetworkMetrics
     device: DeviceMetrics
+
+    @field_validator("timestamp")
+    @classmethod
+    def _utc(cls, v: datetime) -> datetime:
+        return ensure_utc(v)

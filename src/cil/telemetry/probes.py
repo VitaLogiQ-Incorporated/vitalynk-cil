@@ -17,7 +17,9 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from cil.timeutil import ensure_utc
 
 
 class ProbeDepth(StrEnum):
@@ -84,6 +86,11 @@ class EndpointHealth(BaseModel):
     required_depth: ProbeDepth
     latency_ms: float | None = None
     detail: str | None = None
+
+    @field_validator("timestamp")
+    @classmethod
+    def _utc(cls, v: datetime) -> datetime:
+        return ensure_utc(v)
 
 
 @runtime_checkable
