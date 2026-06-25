@@ -5,3 +5,42 @@ each event as it occurs — FAILOVER, RECOVERY, ROLLBACK, ESCALATION, SLA_BREACH
 OPTIMIZATION, NO_ACTION — and links it to its telemetry window. Curation and
 model training are out of UC1 scope.
 """
+
+from cil.audit.bus import EventBus
+from cil.audit.events import (
+    AuditRecord,
+    ContinuityEvent,
+    DecisionAction,
+    EventKind,
+    EventLabel,
+    EventSource,
+    LabeledEvent,
+    ScoreKind,
+    ScoreSample,
+    TelemetryWindow,
+    new_event_id,
+    window_id_for,
+)
+from cil.audit.labeler import EventLabeler, LabelingConfig, LabelResult, load_labeling_config
+from cil.audit.synthetic import SyntheticEventSource
+
+__all__ = [
+    "AuditRecord",
+    "ContinuityEvent",
+    "DecisionAction",
+    "EventBus",
+    "EventKind",
+    "EventLabel",
+    "EventLabeler",
+    "EventSource",
+    "LabelResult",
+    "LabeledEvent",
+    "LabelingConfig",
+    "ScoreKind",
+    "ScoreSample",
+    "SyntheticEventSource",
+    "TelemetryWindow",
+    "load_labeling_config",
+    "new_event_id",
+    "window_id_for",
+]

@@ -1,0 +1,13 @@
+# CCS-001 — Clinical Continuity Score tier matrix (Tier 1, APPROVED).
+# Config-driven, never hardcoded. Tier 2/3 deferred to Gate 8A (governance-owned).
+# The SLA_BREACH labeling rule derives its threshold + dwell from here.
+
+outage_threshold: 40   # CCS < 40 ...
+sla_sustain_s: 5       # ... sustained for 5s => OUTAGE / SLA_BREACH
+
+tiers:
+  - { name: Protected, min: 90, max: 100 }   # healthy
+  - { name: Stable, min: 75, max: 89 }       # normal
+  - { name: Degraded, min: 60, max: 74 }     # watch
+  - { name: "Breach Risk", min: 40, max: 59 } # at risk
+  - { name: OUTAGE, min: 0, max: 39 }        # SLA_BREACH when sustained

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     retention_sweep_interval_s: float = 3600.0
     # Negative-class sampling for the training set.
     no_action_sample_interval_s: float = 60.0
+    # Labeling config artifacts (CIL-303). SLA thresholds live in CCS-001.
+    ccs_tiers_path: str = "config/ccs_tiers.yaml"
+    labeling_config_path: str = "config/labeling.yaml"
 
     # Path to the YAML config file. Read from the environment so the file source
     # can be pointed elsewhere per environment without code changes.

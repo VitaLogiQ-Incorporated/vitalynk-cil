@@ -1,0 +1,9 @@
+# CIL-303 — automated event labeling rules (rule-based, NOT ML).
+# SLA thresholds live in CCS-001 (ccs_tiers.yaml); this file holds the rest.
+
+# A DECISION that reverts a prior FAILOVER within this window is a ROLLBACK.
+rollback_window_seconds: 120
+
+# Withhold an authoritative RECOVERY label for endpoints whose required probe
+# depth is render-state (can't yet be verified — pending clinical input).
+render_state_conservative: true
