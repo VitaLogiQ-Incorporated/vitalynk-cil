@@ -22,9 +22,12 @@ from cil.audit.events import (
     window_id_for,
 )
 from cil.audit.labeler import EventLabeler, LabelingConfig, LabelResult, load_labeling_config
+from cil.audit.pipeline import DEFAULT_ANCHOR_KINDS, LabelingPipeline
 from cil.audit.synthetic import SyntheticEventSource
+from cil.audit.window_capture import WindowCaptureService
 
 __all__ = [
+    "DEFAULT_ANCHOR_KINDS",
     "AuditRecord",
     "ContinuityEvent",
     "DecisionAction",
@@ -36,10 +39,12 @@ __all__ = [
     "LabelResult",
     "LabeledEvent",
     "LabelingConfig",
+    "LabelingPipeline",
     "ScoreKind",
     "ScoreSample",
     "SyntheticEventSource",
     "TelemetryWindow",
+    "WindowCaptureService",
     "load_labeling_config",
     "new_event_id",
     "window_id_for",

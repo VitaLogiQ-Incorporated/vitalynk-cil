@@ -365,8 +365,11 @@ class InMemoryTrainingStore:
         rows = sorted(self._windows.values(), key=lambda w: w.start_us, reverse=True)
         return rows[:limit]
 
+    async def list_window_ranges(self) -> list[tuple[int, int]]:
+        return [(w.start_us, w.end_us) for w in self._windows.values()]
+
     async def list_unfinalized(self) -> list[TelemetryWindow]:
-        return [w for w in self._windows.values() if not w.complete_post]
+        return [w for w in self._windows.values() if w.finalized_at is None]
 
     async def count(self) -> int:
         return len(self._windows)

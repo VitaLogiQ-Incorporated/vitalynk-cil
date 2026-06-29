@@ -26,6 +26,7 @@ from cil.storage.memory import (
     InMemoryTelemetryStore,
     InMemoryTrainingStore,
 )
+from cil.storage.retention import RetentionSweeper
 from cil.storage.sqlite import SQLiteTelemetryStore
 from cil.storage.sqlite_app import SQLiteApplicationHealthStore
 from cil.storage.sqlite_audit import SQLiteAuditStore
@@ -46,6 +47,7 @@ __all__ = [
     "InMemoryTelemetryStore",
     "InMemoryTrainingStore",
     "LabelStore",
+    "RetentionSweeper",
     "SQLiteApplicationHealthStore",
     "SQLiteAuditStore",
     "SQLiteEventStore",

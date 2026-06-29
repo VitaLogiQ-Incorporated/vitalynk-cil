@@ -73,8 +73,8 @@ async def test_training_has_no_purge_path(make: Callable[[], TrainingStore]) -> 
 async def test_list_unfinalized(make: Callable[[], TrainingStore]) -> None:
     store = make()
     await store.setup()
-    await store.write_window(header("evt_open"))  # complete_post defaults False
-    finalized = header("evt_done").model_copy(update={"complete_post": True})
+    await store.write_window(header("evt_open"))  # finalized_at defaults None
+    finalized = header("evt_done").model_copy(update={"finalized_at": BASE, "complete_post": True})
     await store.write_window(finalized)
 
     unfinalized = await store.list_unfinalized()

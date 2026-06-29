@@ -335,12 +335,23 @@ class SQLiteTrainingStore:
             )
         return [_window_from_row(r) for r in rows]
 
+    async def list_window_ranges(self) -> list[tuple[int, int]]:
+        async with self._lock:
+            rows = await asyncio.to_thread(
+                lambda: (
+                    self._require_conn()
+                    .execute("SELECT start_us, end_us FROM training_windows")
+                    .fetchall()
+                )
+            )
+        return [(int(r["start_us"]), int(r["end_us"])) for r in rows]
+
     async def list_unfinalized(self) -> list[TelemetryWindow]:
         async with self._lock:
             rows = await asyncio.to_thread(
                 lambda: (
                     self._require_conn()
-                    .execute("SELECT * FROM training_windows WHERE complete_post = 0")
+                    .execute("SELECT * FROM training_windows WHERE finalized_at IS NULL")
                     .fetchall()
                 )
             )
