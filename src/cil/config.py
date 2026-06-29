@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     ccs_tiers_path: str = "config/ccs_tiers.yaml"
     labeling_config_path: str = "config/labeling.yaml"
 
+    # Scoring (EPIC-04: CQS + CCS). Weights live in their config artifacts;
+    # CCS tiers + SLA threshold come from CCS-001 (ccs_tiers_path).
+    scoring_enabled: bool = True
+    scoring_interval_s: float = 1.0
+    cqs_config_path: str = "config/cqs.yaml"
+    ccs_config_path: str = "config/ccs.yaml"
+
     # Path to the YAML config file. Read from the environment so the file source
     # can be pointed elsewhere per environment without code changes.
     config_file: str = DEFAULT_CONFIG_FILE

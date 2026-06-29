@@ -18,6 +18,7 @@ from cil.scoring.ccs import (
     load_ccs_tiers,
 )
 from cil.scoring.cqs import CQSConfig, CQSEngine, MetricSpec, load_cqs_config
+from cil.scoring.service import ScoringService
 
 __all__ = [
     "CCSConfig",
@@ -27,6 +28,7 @@ __all__ = [
     "CQSEngine",
     "EndpointScores",
     "MetricSpec",
+    "ScoringService",
     "Tier",
     "load_ccs_config",
     "load_ccs_tiers",

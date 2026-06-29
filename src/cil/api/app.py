@@ -34,6 +34,9 @@ from cil.audit.pipeline import LabelingPipeline
 from cil.audit.window_capture import WindowCaptureService
 from cil.config import Settings, get_settings
 from cil.logging import configure_logging, get_logger
+from cil.scoring.ccs import CCSEngine, load_ccs_config, load_ccs_tiers
+from cil.scoring.cqs import CQSEngine, load_cqs_config
+from cil.scoring.service import ScoringService
 from cil.storage.retention import RetentionSweeper
 from cil.storage.sqlite import SQLiteTelemetryStore
 from cil.storage.sqlite_app import SQLiteApplicationHealthStore
@@ -77,6 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         store: SQLiteTelemetryStore | None = None
         app_store: SQLiteApplicationHealthStore | None = None
+        score_store: SQLiteScoreStore | None = None
+        collector: TelemetryCollector | None = None
+        app_monitor: ApplicationMonitor | None = None
         if need_telemetry:
             store = SQLiteTelemetryStore(op_db)
             await store.setup()
@@ -216,6 +222,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             app.state.app_monitor = app_monitor
             tasks.append(asyncio.create_task(app_monitor.run()))
+
+        # ---- Scoring loop (EPIC-04: CQS + CCS) ----
+        if settings.scoring_enabled and bus is not None and score_store is not None:
+            tiers = load_ccs_tiers(settings.ccs_tiers_path)
+            scoring = ScoringService(
+                cqs=CQSEngine(load_cqs_config(settings.cqs_config_path)),
+                ccs=CCSEngine(load_ccs_config(settings.ccs_config_path), tiers),
+                score_store=score_store,
+                telemetry_provider=lambda: collector.latest if collector is not None else None,
+                health_provider=lambda: (
+                    list(app_monitor.latest.values()) if app_monitor is not None else []
+                ),
+                bus=bus,
+                outage_threshold=tiers.outage_threshold,
+                sla_sustain_s=tiers.sla_sustain_s,
+            )
+            app.state.scoring = scoring
+            tasks.append(asyncio.create_task(scoring.run(interval_s=settings.scoring_interval_s)))
 
         try:
             yield

@@ -25,6 +25,8 @@ def _settings(tmp_path: Path) -> Settings:
         app_monitoring_interval_s=0.02,
         data_platform_enabled=True,
         no_action_sample_interval_s=0.02,
+        scoring_enabled=True,
+        scoring_interval_s=0.02,
         window_before_s=2,
         window_after_s=2,
         window_min_radius_s=0,
@@ -48,6 +50,19 @@ def test_data_platform_end_to_end(tmp_path: Path) -> None:
         # The NO_ACTION heartbeat guarantees the training-set negative class.
         kinds = {e["kind"] for e in events}
         assert "no_action_sample" in kinds
+
+        # EPIC-04: the scoring loop now fills /scores with CQS + CCS samples.
+        scores: list[dict] = []
+        for _ in range(250):
+            scores = c.get("/scores", params={"limit": 100}).json()
+            if scores:
+                break
+            time.sleep(0.02)
+        assert scores, "scoring loop produced no scores"
+        score_kinds = {s["kind"] for s in scores}
+        assert "CCS" in score_kinds  # the authoritative metric is being computed
+        ccs = next(s for s in scores if s["kind"] == "CCS")
+        assert 0 <= ccs["value"] <= 100 and ccs["tier"] is not None
 
         # Every anchoring event captured a ±window, and it exports self-describing.
         windows = c.get("/training/windows", params={"limit": 100}).json()

@@ -140,7 +140,21 @@ the artifact; deploying it onto the Ericsson E400 / staging is ops-owned.
   `/events`, `/scores`, `/audit`, `/training/windows` endpoints + JSONL export seam
   + `cil_events_total` / `cil_labels_total` metrics.
 
-Next: scoring — **CQS/CCS** (Sprint 3), which consumes WAN telemetry + clinical
-liveness and becomes the data platform's score producer. The live Ericsson
-telemetry binding (EPIC-07) plugs into the existing `TelemetryAdapter` seam; the
-real clinical probe into the `ApplicationProbe` seam.
+**Sprint 3 — QoS & CCS scoring (EPIC-04).** Done — see [docs/scoring.md](docs/scoring.md):
+
+- **CIL-401** — **CQS** (Carrier Quality Score): deterministic 0–100 from telemetry
+  (each metric mapped good→100/bad→0, weighted mean over present metrics,
+  reachability-gated). Config-driven via `config/cqs.yaml`.
+- **CIL-402** — **CCS** (Clinical Continuity Score), the authoritative metric:
+  clinical liveness blended with CQS using a **worst-case** weighting (one dead
+  critical system can't be masked by a healthy average); **CCS-001 tier matrix**
+  (Protected/Stable/Degraded/Breach Risk/OUTAGE). Config-driven via `config/ccs.yaml`
+  + `config/ccs_tiers.yaml`.
+- **Scoring loop** wired into the app: each tick computes CQS + CCS, fills `/scores`,
+  feeds the labeler, and edge-detects **`SLA_BREACH`** (CCS < 40 sustained 5s) →
+  one anchoring `SLA_STATE` event → captured window + label.
+
+Next: **Policy (EPIC-05)** then the **Decision FSM (EPIC-06)**, which consume these
+scores to decide `stay/shift/failover/optimize/escalate` (the CIL decides; Ericsson
+executes). The live Ericsson telemetry binding (EPIC-07) plugs into the existing
+`TelemetryAdapter` seam; the real clinical probe into the `ApplicationProbe` seam.
