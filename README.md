@@ -126,10 +126,21 @@ the artifact; deploying it onto the Ericsson E400 / staging is ops-owned.
   injectable probe conditions, state-change events, `/clinical/*` endpoints +
   `cil_app_*` metrics. Probe depth is modeled (link/IP/app-response/render-state);
   render-state is flagged as **pending clinical input** (open question).
-- **CIL-301 (operational store)** — SQLite behind a swappable interface,
-  native-resolution, reboot-safe; `telemetry` + `application_health` tables.
-  (Event-window/labeling schema CIL-302/303 = Sprint 2.)
+**Sprint 2 — Data Platform (EPIC-03).** Done — see [docs/data-platform.md](docs/data-platform.md):
+
+- **CIL-301** — operational store + **retention sweeper** (24-month purge of
+  telemetry/app-health/scores; immutable event spine + audit never pruned; pinned
+  training windows protected). Canonical integer `ts_us` time key throughout.
+- **CIL-302** — **±15-min native-resolution window capture** into a *separate,
+  delete-free* training DB: two-phase + crash-safe, idempotent, byte-identical to
+  source (no downsampling), short windows flagged not silently completed.
+- **CIL-303** — **automated event labeling** (7 rules, CCS-001-driven, no ML) via
+  an event bus + labeling pipeline; the ApplicationMonitor publishes endpoint
+  state-changes and a NO_ACTION heartbeat supplies the negative class. Read-only
+  `/events`, `/scores`, `/audit`, `/training/windows` endpoints + JSONL export seam
+  + `cil_events_total` / `cil_labels_total` metrics.
 
 Next: scoring — **CQS/CCS** (Sprint 3), which consumes WAN telemetry + clinical
-liveness. The live Ericsson telemetry binding (EPIC-07) plugs into the existing
-`TelemetryAdapter` seam; the real clinical probe into the `ApplicationProbe` seam.
+liveness and becomes the data platform's score producer. The live Ericsson
+telemetry binding (EPIC-07) plugs into the existing `TelemetryAdapter` seam; the
+real clinical probe into the `ApplicationProbe` seam.

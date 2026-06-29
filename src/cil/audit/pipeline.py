@@ -19,9 +19,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from prometheus_client import Counter
+
 from cil.audit.events import AuditRecord, EventKind, LabeledEvent
 from cil.logging import get_logger
 from cil.timeutil import to_us
+
+EVENTS_TOTAL = Counter(
+    "cil_events_total", "Continuity events handled by the pipeline.", labelnames=("kind",)
+)
+LABELS_TOTAL = Counter("cil_labels_total", "Automated event labels written.", labelnames=("label",))
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -78,6 +85,7 @@ class LabelingPipeline:
         self._log = get_logger("cil.audit.pipeline")
 
     async def handle(self, event: ContinuityEvent) -> None:
+        EVENTS_TOTAL.labels(event.kind.value).inc()
         # Feed the SLA timeline from any CCS-carrying event.
         if event.ccs is not None:
             self._labeler.observe_score(_subject(event), event.ccs, event.timestamp)
@@ -87,6 +95,7 @@ class LabelingPipeline:
 
         window = await self._capture.capture(event)
         result = self._labeler.label(event)
+        LABELS_TOTAL.labels(result.label.value).inc()
         labeled = LabeledEvent(
             event_id=event.event_id,
             label=result.label,

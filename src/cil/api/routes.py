@@ -11,8 +11,10 @@ from starlette.responses import Response
 
 from cil import __version__
 from cil.api.metrics import render_metrics
+from cil.audit.events import AuditRecord, ContinuityEvent, ScoreSample, TelemetryWindow
 from cil.config import get_settings
-from cil.storage.interface import TelemetryStore
+from cil.storage.export import TrainingExporter
+from cil.storage.interface import AuditStore, EventStore, ScoreStore, TelemetryStore, TrainingStore
 from cil.telemetry.app_monitor import ApplicationMonitor
 from cil.telemetry.monitor import TelemetryCollector
 from cil.telemetry.probes import ClinicalEndpoint, EndpointHealth
@@ -105,6 +107,64 @@ def clinical_endpoints(request: Request) -> list[ClinicalEndpoint]:
     if not isinstance(monitor, ApplicationMonitor):
         return []
     return monitor.endpoints
+
+
+@router.get("/events", tags=["data-platform"])
+async def events(request: Request, limit: int = 50) -> list[ContinuityEvent]:
+    """Recent continuity events from the immutable event spine (newest-first)."""
+    store = getattr(request.app.state, "event_store", None)
+    if not isinstance(store, EventStore):
+        return []
+    return await store.read_events(limit=limit)
+
+
+@router.get("/events/{event_id}", tags=["data-platform"], response_model=None)
+async def event_detail(request: Request, event_id: str) -> ContinuityEvent | JSONResponse:
+    """A single continuity event by id."""
+    store = getattr(request.app.state, "event_store", None)
+    if isinstance(store, EventStore):
+        event = await store.get_event(event_id)
+        if event is not None:
+            return event
+    return JSONResponse({"detail": "event not found"}, status_code=404)
+
+
+@router.get("/scores", tags=["data-platform"])
+async def scores(request: Request, limit: int = 50) -> list[ScoreSample]:
+    """Recent CQS/CCS score samples (newest-first)."""
+    store = getattr(request.app.state, "score_store", None)
+    if not isinstance(store, ScoreStore):
+        return []
+    return await store.read_scores(limit=limit)
+
+
+@router.get("/audit", tags=["data-platform"])
+async def audit(request: Request, limit: int = 50) -> list[AuditRecord]:
+    """Recent audit records (newest-first)."""
+    store = getattr(request.app.state, "audit_store", None)
+    if not isinstance(store, AuditStore):
+        return []
+    return await store.read(limit=limit)
+
+
+@router.get("/training/windows", tags=["data-platform"])
+async def training_windows(request: Request, limit: int = 50) -> list[TelemetryWindow]:
+    """Captured ±15-min training windows (the indefinite UC2 dataset headers)."""
+    store = getattr(request.app.state, "training_store", None)
+    if not isinstance(store, TrainingStore):
+        return []
+    return await store.list_windows(limit=limit)
+
+
+@router.get("/training/windows/{window_id}", tags=["data-platform"], response_model=None)
+async def training_window_export(request: Request, window_id: str) -> JSONResponse:
+    """A single window's self-describing export (header + native rows + label)."""
+    store = getattr(request.app.state, "training_store", None)
+    if isinstance(store, TrainingStore):
+        record = await TrainingExporter(store).export_window(window_id)
+        if record is not None:
+            return JSONResponse(record)
+    return JSONResponse({"detail": "window not found"}, status_code=404)
 
 
 @router.get("/", tags=["ops"])

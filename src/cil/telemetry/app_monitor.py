@@ -20,8 +20,14 @@ from prometheus_client import Counter, Gauge
 from cil.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from cil.storage.interface import ApplicationHealthStore
     from cil.telemetry.probes import ApplicationProbe, ClinicalEndpoint, EndpointHealth
+
+    # Sink that turns an endpoint health change into a continuity event (wired by the
+    # app to the event bus). Kept as a callback so this module needn't import audit.
+    EndpointEventSink = Callable[[EndpointHealth, str], Awaitable[None]]
 
 APP_REACHABLE = Gauge(
     "cil_app_reachable",
@@ -55,11 +61,13 @@ class ApplicationMonitor:
         store: ApplicationHealthStore | None = None,
         *,
         interval_s: float = 5.0,
+        event_sink: EndpointEventSink | None = None,
     ) -> None:
         self._probe = probe
         self._endpoints = tuple(endpoints)
         self._store = store
         self._interval = interval_s
+        self._event_sink = event_sink
         self._latest: dict[str, EndpointHealth] = {}
         self._prev: dict[str, EndpointHealth] = {}
         self._log = get_logger("cil.telemetry.app_monitor")
@@ -87,21 +95,23 @@ class ApplicationMonitor:
             if not health.healthy:
                 APP_PROBE_FAILURES.labels(health.endpoint, health.system).inc()
 
-            self._maybe_emit_event(health)
+            kind = self._maybe_emit_event(health)
+            if kind is not None and self._event_sink is not None:
+                await self._event_sink(health, kind)
             self._prev[endpoint.name] = health
         return results
 
-    def _maybe_emit_event(self, health: EndpointHealth) -> None:
+    def _maybe_emit_event(self, health: EndpointHealth) -> str | None:
         prev = self._prev.get(health.endpoint)
         if prev is None:
             if health.healthy:
-                return  # first observation healthy => nothing to report
+                return None  # first observation healthy => nothing to report
         elif (prev.reachable, prev.live, prev.healthy) == (
             health.reachable,
             health.live,
             health.healthy,
         ):
-            return  # unchanged
+            return None  # unchanged
 
         if not health.reachable:
             kind = "ENDPOINT_UNREACHABLE"
@@ -123,6 +133,7 @@ class ApplicationMonitor:
             healthy=health.healthy,
             detail=health.detail,
         )
+        return kind
 
     async def run(
         self,

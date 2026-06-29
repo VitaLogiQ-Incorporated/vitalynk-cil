@@ -7,6 +7,7 @@ native-resolution with no downsampling (see CLAUDE.md §6); all range/order math
 is on the canonical ``ts_us`` key.
 """
 
+from cil.storage.export import OperationalExporter, TrainingExporter
 from cil.storage.interface import (
     ApplicationHealthStore,
     AuditStore,
@@ -47,6 +48,7 @@ __all__ = [
     "InMemoryTelemetryStore",
     "InMemoryTrainingStore",
     "LabelStore",
+    "OperationalExporter",
     "RetentionSweeper",
     "SQLiteApplicationHealthStore",
     "SQLiteAuditStore",
@@ -57,5 +59,6 @@ __all__ = [
     "SQLiteTrainingStore",
     "ScoreStore",
     "TelemetryStore",
+    "TrainingExporter",
     "TrainingStore",
 ]
