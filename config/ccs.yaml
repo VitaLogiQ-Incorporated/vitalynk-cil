@@ -1,0 +1,17 @@
+# CCS — Clinical Continuity Score weighting (config-driven, never hardcoded).
+# The TIER MATRIX + OUTAGE/SLA threshold live in ccs_tiers.yaml (CCS-001); this
+# file is only the blend used to produce the 0-100 value before tiering.
+
+clinical_weight: 0.8   # clinical reachability dominates (the authoritative concern)
+carrier_weight: 0.2    # carrier quality (CQS) modulates
+
+# Within the clinical component, how much the WORST endpoint counts vs the mean,
+# so one dead critical system (e.g. the EHR) can't be masked by a healthy average.
+worst_weight: 0.5
+
+# Per-state 0-100 contribution of each clinical endpoint.
+endpoint_scores:
+  healthy: 100      # meets its required probe depth
+  degraded: 60      # reachable + live but below required depth
+  frozen: 30        # reachable but not live (frozen-screen)
+  unreachable: 0    # link/IP not reachable

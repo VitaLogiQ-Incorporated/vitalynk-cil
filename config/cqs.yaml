@@ -1,0 +1,15 @@
+# CQS-001 — Carrier Quality Score weights + bounds (config-driven, never hardcoded).
+# Each metric maps linearly to a 0-100 sub-score: `good` -> 100, `bad` -> 0 (clamped).
+# Direction is implied by good/bad (e.g. latency good=low, sinr good=high).
+# CQS = weighted mean of the sub-scores for the metrics actually present in a sample.
+
+unreachable_score: 0   # CQS when network.reachable is false (reachability gates all)
+
+metrics:
+  sinr:            { weight: 2.0, good: 25,   bad: 0 }      # dB, higher better
+  rsrp:            { weight: 1.0, good: -80,  bad: -120 }   # dBm, higher better
+  rsrq:            { weight: 1.0, good: -8,   bad: -20 }    # dB, higher better
+  latency_ms:      { weight: 1.5, good: 20,   bad: 200 }    # ms, lower better
+  packet_loss_pct: { weight: 2.0, good: 0,    bad: 5 }      # %, lower better
+  jitter_ms:       { weight: 1.0, good: 1,    bad: 50 }     # ms, lower better
+  throughput_mbps: { weight: 1.0, good: 100,  bad: 1 }      # Mbps, higher better
