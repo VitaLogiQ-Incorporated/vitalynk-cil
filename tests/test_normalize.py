@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 from structlog.testing import capture_logs
 
@@ -76,12 +76,23 @@ def test_unparseable_value_treated_as_missing() -> None:
     assert "throughput_mbps" in warnings[0]["fields"]
 
 
-def test_timestamp_accepts_datetime_and_adds_utc() -> None:
+def test_naive_timestamp_assumed_utc_but_warned() -> None:
     raw = _complete_raw()
     raw["timestamp"] = datetime(2026, 6, 1, 12, 0, 0)  # naive
-    s = normalize(raw)
-    assert s.timestamp.tzinfo is not None
+    with capture_logs() as logs:
+        s = normalize(raw, logger=get_logger("test"))
     assert s.timestamp == datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
+    # the assumption is surfaced, not silent (guards training-window clock skew)
+    assert [e for e in logs if e["event"] == "telemetry.naive_timestamp"]
+
+
+def test_aware_non_utc_timestamp_converted_to_utc_no_warning() -> None:
+    raw = _complete_raw()
+    raw["timestamp"] = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=5)))
+    with capture_logs() as logs:
+        s = normalize(raw, logger=get_logger("test"))
+    assert s.timestamp == datetime(2026, 6, 1, 7, 0, 0, tzinfo=UTC)  # +5h -> UTC
+    assert not [e for e in logs if e["event"] == "telemetry.naive_timestamp"]
 
 
 def test_unknown_context_defaults() -> None:

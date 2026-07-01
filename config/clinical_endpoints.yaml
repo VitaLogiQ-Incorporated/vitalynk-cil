@@ -1,0 +1,10 @@
+# Clinical endpoints monitored for continuity (CCS-APP-001), config-driven — no
+# hardcoded fleet. `required_depth` is how deeply liveness must be verified:
+#   link | ip | app_response | render_state  (render_state = the "frozen OR screen"
+#   check, currently pending clinical input — assessed at app_response for now).
+endpoints:
+  - { name: epic-ehr,   system: Epic,   target: "https://epic.local/health",   required_depth: app_response }
+  - { name: cerner,     system: Cerner, target: "https://cerner.local/health", required_depth: app_response }
+  - { name: pacs,       system: PACS,   target: "https://pacs.local/health",   required_depth: app_response }
+  - { name: ris,        system: RIS,    target: "https://ris.local/health",    required_depth: app_response }
+  - { name: or-systems, system: OR,     target: "https://or.local/health",     required_depth: render_state }

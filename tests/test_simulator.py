@@ -92,3 +92,14 @@ async def test_scenario_property_reflects_injection() -> None:
     assert sim.scenario == Scenario.HEALTHY
     sim.set_scenario(Scenario.JITTER_BURST, duration=3)
     assert sim.scenario == Scenario.JITTER_BURST
+
+
+async def test_jitter_burst_actually_raises_jitter() -> None:
+    # behavioral: the scenario must ramp jitter well above the healthy baseline,
+    # not just flip the .scenario property.
+    sim = SimulatorAdapter(seed=1)
+    baseline = (await sim.sample()).network.jitter_ms
+    sim.set_scenario(Scenario.JITTER_BURST, duration=5)
+    peak = max((s.network.jitter_ms or 0.0) for s in await _samples(sim, 6))
+    assert baseline is not None and baseline < 6.0  # healthy jitter is low
+    assert peak >= 20.0  # ramped toward the ~25ms burst peak

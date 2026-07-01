@@ -68,7 +68,9 @@ class Wired(NamedTuple):
     scores: InMemoryScoreStore
 
 
-async def _wire(healths: list[EndpointHealth], *, reachable: bool = True) -> Wired:
+async def _wire(
+    healths: list[EndpointHealth], *, reachable: bool = True, telemetry: bool = True
+) -> Wired:
     events, labels, scores = InMemoryEventStore(), InMemoryLabelStore(), InMemoryScoreStore()
     tel, app, training, audit = (
         InMemoryTelemetryStore(),
@@ -97,7 +99,7 @@ async def _wire(healths: list[EndpointHealth], *, reachable: bool = True) -> Wir
         ccs=CCSEngine(),
         score_store=scores,
         bus=bus,
-        telemetry_provider=lambda: tele(reachable=reachable),
+        telemetry_provider=lambda: tele(reachable=reachable) if telemetry else None,
         health_provider=lambda: healths,
         outage_threshold=40.0,
         sla_sustain_s=5.0,
@@ -149,3 +151,39 @@ async def test_transient_dip_under_5s_does_not_breach() -> None:
     for i in range(3):  # only 3s of outage
         await w.svc.tick(BASE + timedelta(seconds=i))
     assert not any(e.kind is EventKind.SLA_STATE for e in await w.events.read_events(limit=50))
+
+
+async def test_missing_telemetry_scores_clinical_only_not_healthy() -> None:
+    # telemetry gone but a clinical system is frozen -> CCS reflects clinical, not a
+    # phantom-healthy carrier (regression guard for the sample-None inflation bug)
+    w = await _wire([health("epic", live=False, healthy=False)], telemetry=False)
+    out = await w.svc.tick(BASE)
+    assert out["cqs"] is None
+    assert out["ccs"] == 30.0  # clinical-only (frozen=30), not lifted toward healthy
+    assert out["tier"] == "OUTAGE"
+
+
+async def test_no_signal_skips_tick_and_emits_nothing() -> None:
+    # no telemetry AND no clinical health -> skip; never emit a false "healthy" score
+    w = await _wire([], telemetry=False)
+    out = await w.svc.tick(BASE)
+    assert out.get("skipped") is True
+    assert await w.scores.read_scores(limit=10) == []
+    assert await w.events.count() == 0
+
+
+async def test_sla_rebreach_after_recovery_emits_second_breach() -> None:
+    # down -> (breach) -> recover (resets edge) -> down again -> second breach.
+    # `healths` is mutated in place; the provider reads it live.
+    healths = [health("epic", reachable=False, live=False, healthy=False)]
+    w = await _wire(healths)  # carrier healthy; CCS driven by clinical
+    for i in range(6):  # sustained outage -> breach #1
+        await w.svc.tick(BASE + timedelta(seconds=i))
+    healths[:] = [health("epic")]  # recover
+    for i in range(6, 9):
+        await w.svc.tick(BASE + timedelta(seconds=i))
+    healths[:] = [health("epic", reachable=False, live=False, healthy=False)]  # down again
+    for i in range(9, 16):  # sustained outage -> breach #2
+        await w.svc.tick(BASE + timedelta(seconds=i))
+    sla = [e for e in await w.events.read_events(limit=100) if e.kind is EventKind.SLA_STATE]
+    assert len(sla) == 2  # the edge detector re-arms after recovery

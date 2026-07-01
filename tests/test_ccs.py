@@ -111,3 +111,18 @@ def test_outage_tier_below_threshold() -> None:
     value = eng.compute([health("a", reachable=False, live=False, healthy=False)], cqs=0.0)
     assert value == 0.0
     assert eng.classify(value) == "OUTAGE"
+
+
+def test_missing_carrier_scores_clinical_only_not_inflated() -> None:
+    # cqs=None (no telemetry) must NOT be treated as a healthy carrier
+    eng = CCSEngine()
+    frozen = [health("a", live=False, healthy=False)]  # endpoint value 30
+    clinical_only = eng.compute(frozen, cqs=None)
+    with_good_carrier = eng.compute(frozen, cqs=100.0)
+    assert clinical_only == 30.0  # pure clinical, no carrier inflation
+    assert with_good_carrier > clinical_only  # a healthy carrier would otherwise lift it
+
+
+def test_no_signal_at_all_is_zero_not_healthy() -> None:
+    # no telemetry AND no clinical health -> a blackout must not read as healthy
+    assert CCSEngine().compute([], cqs=None) == 0.0

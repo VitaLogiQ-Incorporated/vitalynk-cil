@@ -54,6 +54,7 @@ class InMemoryTelemetryStore:
         self, *, path_id: str | None = None, limit: int = 100
     ) -> list[TelemetrySample]:
         rows = [r for r in self._rows if path_id is None or r.path_id == path_id]
+        rows.sort(key=lambda r: to_us(r.timestamp))  # most-recent-N by canonical ts_us
         return rows[-limit:]
 
     async def read_range(
@@ -104,6 +105,7 @@ class InMemoryApplicationHealthStore:
         self, *, endpoint: str | None = None, limit: int = 100
     ) -> list[EndpointHealth]:
         rows = [r for r in self._rows if endpoint is None or r.endpoint == endpoint]
+        rows.sort(key=lambda r: to_us(r.timestamp))  # most-recent-N by canonical ts_us
         return rows[-limit:]
 
     async def read_range(

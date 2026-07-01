@@ -73,8 +73,17 @@ class ScoringService:
         healths = self._health_provider()
 
         cqs_val: float | None = self._cqs.compute(sample) if sample is not None else None
-        carrier = cqs_val if cqs_val is not None else 100.0
-        ccs_sample = self._ccs.score(healths, carrier, now, subject_id=self._site_id)
+
+        # No telemetry AND no clinical signal -> we cannot assess continuity. Skip the
+        # tick instead of emitting a misleading (falsely healthy) score.
+        if sample is None and not healths:
+            self._log.warning(
+                "scoring.no_signal", note="no telemetry and no clinical health; skipping tick"
+            )
+            return {"cqs": None, "ccs": None, "tier": None, "skipped": True}
+
+        # cqs_val may be None (telemetry missing) -> CCS is computed clinical-only.
+        ccs_sample = self._ccs.score(healths, cqs_val, now, subject_id=self._site_id)
 
         await self._score_store.write_score(ccs_sample)
         if sample is not None and cqs_val is not None:

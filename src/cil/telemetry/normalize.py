@@ -24,6 +24,7 @@ from cil.telemetry.schema import (
     RadioMetrics,
     TelemetrySample,
 )
+from cil.timeutil import coerce_utc
 
 RawTelemetry = Mapping[str, Any]
 
@@ -64,11 +65,12 @@ def _as_float(raw: RawTelemetry, key: str, missing: list[str]) -> float | None:
         return None
 
 
-def _parse_timestamp(value: Any) -> datetime:
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=UTC)
-    parsed = datetime.fromisoformat(str(value))
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+def _parse_timestamp(value: Any) -> tuple[datetime, bool]:
+    """Parse a raw timestamp to UTC. Returns ``(utc, was_naive)`` — naive inputs are
+    assumed UTC (and flagged so the caller warns), aware inputs are converted via
+    ``astimezone`` so a non-UTC offset is handled consistently with the schema."""
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    return coerce_utc(parsed)
 
 
 def normalize(
@@ -103,8 +105,9 @@ def normalize(
         uptime_s=_as_float(raw, "uptime_s", missing),
     )
 
+    naive_ts = False
     if "timestamp" in raw and raw["timestamp"] is not None:
-        timestamp = _parse_timestamp(raw["timestamp"])
+        timestamp, naive_ts = _parse_timestamp(raw["timestamp"])
     else:
         missing.append("timestamp")
         timestamp = datetime.now(tz=UTC)
@@ -125,5 +128,9 @@ def normalize(
             fields=sorted(set(missing)),
             path_id=sample.path_id,
         )
+    if naive_ts and logger is not None:
+        # A naive source timestamp was assumed to be UTC — surface it rather than
+        # letting silent clock skew leak into the indefinite training windows.
+        logger.warning("telemetry.naive_timestamp", path_id=sample.path_id)
 
     return sample

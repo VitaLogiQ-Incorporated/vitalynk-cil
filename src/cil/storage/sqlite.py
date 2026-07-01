@@ -172,10 +172,10 @@ class SQLiteTelemetryStore:
         if path_id is not None:
             sql += " WHERE path_id = ?"
             params.append(path_id)
-        sql += " ORDER BY id DESC LIMIT ?"
+        sql += " ORDER BY ts_us DESC, id DESC LIMIT ?"
         params.append(limit)
         rows = conn.execute(sql, params).fetchall()
-        rows.reverse()  # oldest-first
+        rows.reverse()  # oldest-first, by canonical ts_us
         return rows
 
     async def read_range(

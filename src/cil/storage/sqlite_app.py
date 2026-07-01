@@ -135,10 +135,10 @@ class SQLiteApplicationHealthStore:
         if endpoint is not None:
             sql += " WHERE endpoint = ?"
             params.append(endpoint)
-        sql += " ORDER BY id DESC LIMIT ?"
+        sql += " ORDER BY ts_us DESC, id DESC LIMIT ?"
         params.append(limit)
         rows = conn.execute(sql, params).fetchall()
-        rows.reverse()
+        rows.reverse()  # oldest-first, by canonical ts_us
         return rows
 
     async def read_range(

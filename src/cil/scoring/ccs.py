@@ -111,22 +111,34 @@ class CCSEngine:
             return s.degraded
         return s.healthy
 
-    def compute(self, healths: list[EndpointHealth], cqs: float) -> float:
-        """Return the 0-100 CCS for the given clinical healths + carrier quality."""
-        cqs = max(0.0, min(100.0, cqs))
+    def compute(self, healths: list[EndpointHealth], cqs: float | None) -> float:
+        """Return the 0-100 CCS for the given clinical healths + carrier quality.
+
+        ``cqs`` may be ``None`` when carrier quality is unknown (no telemetry). In that
+        case the score is clinical-only rather than assuming a healthy carrier — and if
+        there is *no* signal at all (no clinical health and no telemetry) it returns 0
+        rather than reporting a blackout as healthy.
+        """
+        carrier = None if cqs is None else max(0.0, min(100.0, cqs))
         if healths:
             values = [self._endpoint_value(h) for h in healths]
             mean_v = sum(values) / len(values)
             worst_v = min(values)
             w = self._config.worst_weight
             clinical = (1.0 - w) * mean_v + w * worst_v
+            if carrier is None:
+                return round(max(0.0, min(100.0, clinical)), 2)  # clinical-only
+        elif carrier is None:
+            return 0.0  # no clinical signal AND no telemetry -> no signal, not healthy
         else:
-            clinical = cqs  # no clinical signal -> fall back to carrier quality
+            clinical = carrier  # no clinical signal -> fall back to carrier quality
 
         denom = self._config.clinical_weight + self._config.carrier_weight
         if denom == 0:
-            return round(clinical, 2)
-        ccs = (self._config.clinical_weight * clinical + self._config.carrier_weight * cqs) / denom
+            return round(max(0.0, min(100.0, clinical)), 2)
+        ccs = (
+            self._config.clinical_weight * clinical + self._config.carrier_weight * carrier
+        ) / denom
         return round(max(0.0, min(100.0, ccs)), 2)
 
     def classify(self, value: float) -> str:
@@ -139,7 +151,7 @@ class CCSEngine:
     def score(
         self,
         healths: list[EndpointHealth],
-        cqs: float,
+        cqs: float | None,
         ts: datetime,
         *,
         subject_id: str = "site",

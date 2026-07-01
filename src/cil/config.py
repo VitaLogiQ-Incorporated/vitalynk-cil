@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     scoring_interval_s: float = 1.0
     cqs_config_path: str = "config/cqs.yaml"
     ccs_config_path: str = "config/ccs.yaml"
+    scoring_site_id: str = "site"
+    scoring_primary_path: str = "modem-a"
+
+    # Clinical endpoints monitored for continuity (CCS-APP-001). Config-driven so the
+    # fleet isn't hardcoded; falls back to a built-in default if the file is absent.
+    clinical_endpoints_path: str = "config/clinical_endpoints.yaml"
 
     # Path to the YAML config file. Read from the environment so the file source
     # can be pointed elsewhere per environment without code changes.

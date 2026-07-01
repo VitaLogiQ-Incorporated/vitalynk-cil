@@ -23,6 +23,16 @@ def ensure_utc_opt(value: datetime | None) -> datetime | None:
     return None if value is None else ensure_utc(value)
 
 
+def coerce_utc(value: datetime) -> tuple[datetime, bool]:
+    """Best-effort UTC for *raw external* timestamps: convert aware datetimes to UTC
+    (via ``astimezone``) and assume naive datetimes are UTC. Returns ``(utc, was_naive)``
+    so the caller can log when it had to assume — unlike :func:`ensure_utc`, which raises.
+    Internal/persisted timestamps must still go through ``ensure_utc``."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC), True
+    return value.astimezone(UTC), False
+
+
 def to_us(value: datetime) -> int:
     """Epoch microseconds (UTC) — the canonical sort/range key."""
     return int(ensure_utc(value).timestamp() * 1_000_000)

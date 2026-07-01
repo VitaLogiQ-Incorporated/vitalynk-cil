@@ -46,7 +46,7 @@ from cil.storage.sqlite_scores import SQLiteScoreStore
 from cil.storage.sqlite_training import SQLiteTrainingStore
 from cil.telemetry.app_monitor import ApplicationMonitor
 from cil.telemetry.monitor import TelemetryCollector
-from cil.telemetry.probes import DEFAULT_CLINICAL_ENDPOINTS, EndpointHealth
+from cil.telemetry.probes import EndpointHealth, load_clinical_endpoints
 from cil.telemetry.simprobe import SimulatedClinicalProbe
 from cil.telemetry.simulator import SimulatorAdapter
 
@@ -196,7 +196,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                             timestamp=now,
                             kind=EventKind.NO_ACTION_SAMPLE,
                             source=EventSource.SYNTHETIC,
-                            path_id="modem-a",
+                            path_id=settings.scoring_primary_path,
                         )
                     )
 
@@ -215,7 +215,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.app_monitoring_enabled and app_store is not None:
             app_monitor = ApplicationMonitor(
                 SimulatedClinicalProbe(),
-                DEFAULT_CLINICAL_ENDPOINTS,
+                load_clinical_endpoints(settings.clinical_endpoints_path),
                 app_store,
                 interval_s=settings.app_monitoring_interval_s,
                 event_sink=event_sink,
@@ -237,9 +237,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 bus=bus,
                 outage_threshold=tiers.outage_threshold,
                 sla_sustain_s=tiers.sla_sustain_s,
+                site_id=settings.scoring_site_id,
+                primary_path=settings.scoring_primary_path,
             )
             app.state.scoring = scoring
             tasks.append(asyncio.create_task(scoring.run(interval_s=settings.scoring_interval_s)))
+        elif settings.scoring_enabled:
+            # scoring needs the event bus + score store, which only the data platform
+            # creates — surface the silent no-op instead of doing nothing quietly.
+            log.warning(
+                "scoring.disabled",
+                reason="scoring_enabled=True but needs data_platform_enabled (bus + score store)",
+            )
 
         try:
             yield

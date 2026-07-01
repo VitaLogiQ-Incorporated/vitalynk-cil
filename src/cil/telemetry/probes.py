@@ -15,8 +15,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
+import yaml
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from cil.timeutil import ensure_utc
@@ -102,8 +104,9 @@ class ApplicationProbe(Protocol):
         ...
 
 
-# A sensible default fleet. App-to-tier mapping is a controlled doc (CCS-APP-001),
-# so this will become config-driven; defined here for the simulator-first build.
+# A sensible default fleet used when no config file is present. App-to-tier mapping is
+# a controlled doc (CCS-APP-001); the live inventory is config-driven (see
+# ``load_clinical_endpoints`` + ``config/clinical_endpoints.yaml``).
 DEFAULT_CLINICAL_ENDPOINTS: tuple[ClinicalEndpoint, ...] = (
     ClinicalEndpoint(name="epic-ehr", system="Epic", target="https://epic.local/health"),
     ClinicalEndpoint(name="cerner", system="Cerner", target="https://cerner.local/health"),
@@ -116,3 +119,20 @@ DEFAULT_CLINICAL_ENDPOINTS: tuple[ClinicalEndpoint, ...] = (
         required_depth=ProbeDepth.RENDER_STATE,  # the frozen-screen concern
     ),
 )
+
+
+def load_clinical_endpoints(
+    path: str = "config/clinical_endpoints.yaml",
+) -> list[ClinicalEndpoint]:
+    """Load the monitored clinical-endpoint inventory (CCS-APP-001) from config.
+
+    Falls back to ``DEFAULT_CLINICAL_ENDPOINTS`` if the file is absent or empty, so the
+    simulator-first build still works out of the box.
+    """
+    if not Path(path).exists():
+        return list(DEFAULT_CLINICAL_ENDPOINTS)
+    raw: dict[str, Any] = yaml.safe_load(Path(path).read_text()) or {}
+    entries = raw.get("endpoints") or []
+    if not entries:
+        return list(DEFAULT_CLINICAL_ENDPOINTS)
+    return [ClinicalEndpoint.model_validate(e) for e in entries]
