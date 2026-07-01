@@ -26,19 +26,31 @@ if TYPE_CHECKING:
 
 
 def _compare(op: ConditionOp, actual: Any, expected: Any) -> bool:
-    """Apply one operator. A missing field (``actual is None``) only satisfies the
-    negative operators; ordering comparisons on incomparable types are False, never
-    raising, so a malformed policy can't crash evaluation."""
+    """Apply one operator.
+
+    A condition on an absent/unknown field (``actual is None``) never holds — for
+    *every* operator (you can't assert equality, inequality, or ordering about an
+    unknown), so an optional context field can't accidentally satisfy ``ne``/``not_in``.
+    ``in``/``not_in`` are membership over a list/tuple/set; a scalar operand means
+    single-value equality (never substring matching). Type-mismatched ordering is
+    False, never raising, so a malformed policy can't crash evaluation.
+    """
+    if actual is None:
+        return False
     if op is ConditionOp.EQ:
         return bool(actual == expected)
     if op is ConditionOp.NE:
         return bool(actual != expected)
     if op is ConditionOp.IN:
-        return isinstance(expected, (list, tuple, set, str)) and actual in expected
+        return (
+            actual in expected if isinstance(expected, (list, tuple, set)) else actual == expected
+        )
     if op is ConditionOp.NOT_IN:
-        return not (isinstance(expected, (list, tuple, set, str)) and actual in expected)
-    if actual is None:
-        return False  # ordering against a missing value never holds
+        return (
+            actual not in expected
+            if isinstance(expected, (list, tuple, set))
+            else actual != expected
+        )
     try:
         if op is ConditionOp.LT:
             return bool(actual < expected)

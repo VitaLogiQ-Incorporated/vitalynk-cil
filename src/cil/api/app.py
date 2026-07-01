@@ -258,7 +258,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             policy_engine = PolicyEngine(load_policy_library(settings.cip_policies_path))
             app.state.policy_engine = policy_engine
             if score_store is not None:
-                app.state.policy_evaluator = PolicyEvaluator(policy_engine, score_store)
+                policy_tiers = load_ccs_tiers(settings.ccs_tiers_path)
+                app.state.policy_evaluator = PolicyEvaluator(
+                    policy_engine,
+                    score_store,
+                    outage_threshold=policy_tiers.outage_threshold,
+                    sla_sustain_s=policy_tiers.sla_sustain_s,
+                )
 
         try:
             yield

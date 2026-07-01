@@ -34,14 +34,13 @@ DEFAULT_LIBRARY = PolicyLibrary(
         ),
         Policy(
             id="CIP-FAILOVER",
-            description="Clinical continuity in OUTAGE / SLA breach — request failover.",
+            description="Sustained SLA breach (CCS < 40 for >= 5s, CCS-001) — request failover. "
+            "Keys on the dwell-gated breach, not a single sub-40 sample, so a transient "
+            "dip does not trigger a disruptive failover.",
             priority=90,
-            any=[
-                Condition(field="sla_breaching", op=ConditionOp.EQ, value=True),
-                Condition(field="ccs_tier", op=ConditionOp.EQ, value="OUTAGE"),
-            ],
+            all=[Condition(field="sla_breaching", op=ConditionOp.EQ, value=True)],
             action=DecisionAction.FAILOVER,
-            reason="CCS OUTAGE / SLA breach",
+            reason="sustained SLA breach",
         ),
         Policy(
             id="CIP-SHIFT",
