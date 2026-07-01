@@ -13,6 +13,9 @@ from cil import __version__
 from cil.api.metrics import render_metrics
 from cil.audit.events import AuditRecord, ContinuityEvent, ScoreSample, TelemetryWindow
 from cil.config import get_settings
+from cil.policy.engine import PolicyEngine
+from cil.policy.models import PolicyEvaluation
+from cil.policy.service import PolicyEvaluator
 from cil.storage.export import TrainingExporter
 from cil.storage.interface import AuditStore, EventStore, ScoreStore, TelemetryStore, TrainingStore
 from cil.telemetry.app_monitor import ApplicationMonitor
@@ -165,6 +168,41 @@ async def training_window_export(request: Request, window_id: str) -> JSONRespon
         if record is not None:
             return JSONResponse(record)
     return JSONResponse({"detail": "window not found"}, status_code=404)
+
+
+@router.get("/policy/policies", tags=["policy"])
+def policy_policies(request: Request) -> list[dict[str, object]]:
+    """The loaded CIP policy library (declarative; CIL-502), highest-priority first."""
+    engine = getattr(request.app.state, "policy_engine", None)
+    if not isinstance(engine, PolicyEngine):
+        return []
+    return [
+        {
+            "id": p.id,
+            "description": p.description,
+            "priority": p.priority,
+            "enabled": p.enabled,
+            "action": p.action.value,
+            "reason": p.reason,
+        }
+        for p in sorted(engine.policies, key=lambda p: p.priority, reverse=True)
+    ]
+
+
+@router.get("/policy/evaluate", tags=["policy"], response_model=None)
+async def policy_evaluate(request: Request) -> PolicyEvaluation | JSONResponse:
+    """Evaluate the CIP library against the latest scores → recommended action (advisory).
+
+    Decide-not-execute: this only *recommends*; the decision FSM (EPIC-06) chooses and
+    Ericsson executes.
+    """
+    evaluator = getattr(request.app.state, "policy_evaluator", None)
+    if not isinstance(evaluator, PolicyEvaluator):
+        return JSONResponse({"detail": "policy evaluation unavailable"}, status_code=404)
+    result = await evaluator.evaluate_latest()
+    if result is None:
+        return JSONResponse({"detail": "no scores yet to evaluate"}, status_code=404)
+    return result
 
 
 @router.get("/", tags=["ops"])

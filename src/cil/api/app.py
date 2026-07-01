@@ -34,6 +34,9 @@ from cil.audit.pipeline import LabelingPipeline
 from cil.audit.window_capture import WindowCaptureService
 from cil.config import Settings, get_settings
 from cil.logging import configure_logging, get_logger
+from cil.policy.engine import PolicyEngine
+from cil.policy.loader import load_policy_library
+from cil.policy.service import PolicyEvaluator
 from cil.scoring.ccs import CCSEngine, load_ccs_config, load_ccs_tiers
 from cil.scoring.cqs import CQSEngine, load_cqs_config
 from cil.scoring.service import ScoringService
@@ -249,6 +252,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "scoring.disabled",
                 reason="scoring_enabled=True but needs data_platform_enabled (bus + score store)",
             )
+
+        # ---- Policy engine (EPIC-05: CIP) ----
+        if settings.policy_enabled:
+            policy_engine = PolicyEngine(load_policy_library(settings.cip_policies_path))
+            app.state.policy_engine = policy_engine
+            if score_store is not None:
+                app.state.policy_evaluator = PolicyEvaluator(policy_engine, score_store)
 
         try:
             yield

@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # fleet isn't hardcoded; falls back to a built-in default if the file is absent.
     clinical_endpoints_path: str = "config/clinical_endpoints.yaml"
 
+    # Policy engine (EPIC-05: CIP). Declarative policy library, config-driven.
+    policy_enabled: bool = True
+    cip_policies_path: str = "config/cip_policies.yaml"
+
     # Path to the YAML config file. Read from the environment so the file source
     # can be pointed elsewhere per environment without code changes.
     config_file: str = DEFAULT_CONFIG_FILE
