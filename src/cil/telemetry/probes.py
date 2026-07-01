@@ -16,11 +16,12 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import yaml
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from cil.logging import get_logger
 from cil.timeutil import ensure_utc
 
 
@@ -64,7 +65,10 @@ def assess(
 class ClinicalEndpoint(BaseModel):
     """A protected clinical system to monitor (Epic, Cerner, PACS, RIS, OR…)."""
 
-    model_config = ConfigDict(frozen=True)
+    # extra="forbid": a config typo (e.g. `requird_depth:`) must fail loudly rather
+    # than silently downgrade an endpoint to the default depth (dangerous for the
+    # render-state OR endpoint).
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     system: str
@@ -129,10 +133,15 @@ def load_clinical_endpoints(
     Falls back to ``DEFAULT_CLINICAL_ENDPOINTS`` if the file is absent or empty, so the
     simulator-first build still works out of the box.
     """
-    if not Path(path).exists():
-        return list(DEFAULT_CLINICAL_ENDPOINTS)
-    raw: dict[str, Any] = yaml.safe_load(Path(path).read_text()) or {}
-    entries = raw.get("endpoints") or []
+    log = get_logger("cil.telemetry.probes")
+    loaded = yaml.safe_load(Path(path).read_text()) if Path(path).exists() else None
+    entries = loaded.get("endpoints") if isinstance(loaded, dict) else None
     if not entries:
+        # Surface the fallback so an edited-but-unfound inventory isn't silently ignored.
+        log.warning(
+            "clinical_endpoints.fallback_default", path=path, count=len(DEFAULT_CLINICAL_ENDPOINTS)
+        )
         return list(DEFAULT_CLINICAL_ENDPOINTS)
-    return [ClinicalEndpoint.model_validate(e) for e in entries]
+    endpoints = [ClinicalEndpoint.model_validate(e) for e in entries]
+    log.info("clinical_endpoints.loaded", path=path, count=len(endpoints))
+    return endpoints

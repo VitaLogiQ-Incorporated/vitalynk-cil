@@ -14,6 +14,7 @@ CIL-303 labeler, which consumes the score samples this engine publishes.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -119,7 +120,8 @@ class CCSEngine:
         there is *no* signal at all (no clinical health and no telemetry) it returns 0
         rather than reporting a blackout as healthy.
         """
-        carrier = None if cqs is None else max(0.0, min(100.0, cqs))
+        # Treat a NaN carrier as unknown (else max/min would clamp NaN to a healthy 100).
+        carrier = None if cqs is None or math.isnan(cqs) else max(0.0, min(100.0, cqs))
         if healths:
             values = [self._endpoint_value(h) for h in healths]
             mean_v = sum(values) / len(values)

@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
+from structlog.testing import capture_logs
+
 from cil.audit.bus import EventBus
 from cil.audit.events import EventKind, EventLabel, ScoreKind
 from cil.audit.labeler import EventLabeler, LabelingConfig
@@ -170,6 +172,15 @@ async def test_no_signal_skips_tick_and_emits_nothing() -> None:
     assert out.get("skipped") is True
     assert await w.scores.read_scores(limit=10) == []
     assert await w.events.count() == 0
+
+
+async def test_no_signal_warns_once_per_episode() -> None:
+    # repeated no-signal ticks must warn once, not spam a warning every tick
+    w = await _wire([], telemetry=False)
+    with capture_logs() as logs:
+        for i in range(4):
+            await w.svc.tick(BASE + timedelta(seconds=i))
+    assert len([e for e in logs if e["event"] == "scoring.no_signal"]) == 1
 
 
 async def test_sla_rebreach_after_recovery_emits_second_breach() -> None:

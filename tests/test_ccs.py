@@ -126,3 +126,10 @@ def test_missing_carrier_scores_clinical_only_not_inflated() -> None:
 def test_no_signal_at_all_is_zero_not_healthy() -> None:
     # no telemetry AND no clinical health -> a blackout must not read as healthy
     assert CCSEngine().compute([], cqs=None) == 0.0
+
+
+def test_nan_carrier_treated_as_unknown_not_healthy() -> None:
+    # a NaN CQS must not clamp to a healthy 100 — treat it as unknown carrier
+    eng = CCSEngine()
+    frozen = [health("a", live=False, healthy=False)]  # 30
+    assert eng.compute(frozen, cqs=float("nan")) == 30.0
